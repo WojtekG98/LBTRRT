@@ -29,7 +29,7 @@ class IterationPTC(object):
         self.iter += 1
         return self.iter >= self.maxIter
 
-def plan(space, planner, maxIter, start, goal):
+def plan(space, planner, time, start, goal):
     ss = og.SimpleSetup(space)
     if cies == 1:
         ss.setStateValidityChecker(ob.StateValidityCheckerFn(ciesnina.isStateValid))
@@ -62,31 +62,33 @@ def plan(space, planner, maxIter, start, goal):
         print('Bad planner')
     print("\n")
     print(planner, ":")
-    #OptObj = ob.PathLengthOptimizationObjective(ss.getSpaceInformation())
+    OptObj = ob.PathLengthOptimizationObjective(ss.getSpaceInformation())
     #OptObj.setCostThreshold(c_best)
-    #ss.setOptimizationObjective(OptObj)
-    #print("OptObj", ss.getOptimizationObjective().getDescription())
-    iptc = IterationPTC(maxIter)
-    solved = ss.solve(ob.PlannerTerminationConditionFn(iptc))
-    print("Time:", ss.getLastPlanComputationTime())
+    ss.setOptimizationObjective(OptObj)
+    print("OptObj", ss.getOptimizationObjective().getDescription())
+    #iptc = IterationPTC(maxIter)
+    #solved = ss.solve(ob.PlannerTerminationConditionFn(iptc))
+    solved = ss.solve(time)
+    #print("Time:", ss.getLastPlanComputationTime())
     if solved:
-        PD = ob.PlannerData(ss.getSpaceInformation())
-        ss.getPlannerData(PD)
-        print("numVertices:", PD.numVertices())
-        print("numIterations:", iptc.iter)
+        #PD = ob.PlannerData(ss.getSpaceInformation())
+        #ss.getPlannerData(PD)
+        #print("numVertices:", PD.numVertices())
+        #print("numIterations:", iptc.iter)
         ss.simplifySolution()
         path = ss.getSolutionPath()
+        if path.getState(path.getStateCount()).getX() == goal[0] and path.getState(path.getStateCount()).getY() == goal[1]:
+            found = 1
+        else:
+            found = 0
+
         print("Info:    Path length:", path.length())
         # print(path.printAsMatrix())
         path.interpolate(1000)
-        if planner.lower() == 'astar':
-            return path.length()
-        else:
-            return path.printAsMatrix()
-
+        return found, path.printAsMatrix()
     else:
         print("No solution found.")
-        return None
+        return 0, None
 
 
 def print_path_txt(path):
@@ -164,41 +166,39 @@ def set_start_and_goal(start, goal):
             while not labirynt.isStateValid2(goal):
                 goal[0], goal[1] = random.randint(0, N), random.randint(0, N)
 
-def badanie(nr, maxIter, space, start, goal):
-    nazwa_pliku = "badania/" + str(int(nr)) + "I" + str(int(maxIter)) + ".txt"
+def badanie(nr, time, space, start, goal):
+    nazwa_pliku = "badania/" + str(int(nr)) + "I" + str(int(time)) + ".txt"
     f = open(nazwa_pliku, 'w')
-    #sys.stdout = f
+    sys.stdout = f
 
-    rrtstar_path = plan(space, 'rrtstar', maxIter, start, goal)
-    plot_path_to_png(rrtstar_path, 'g-', 0, N, 1, 'RRT*', 'figures/path_RRTStar.png', start, goal)
+    rrtstar_path = plan(space, 'rrtstar', time, start, goal)
+    plot_path_to_png(rrtstar_path[1], 'g-', 0, N, 1, 'RRT*', 'figures/path_RRTStar.png', start, goal)
 
-    sst_path = plan(space, 'sst', maxIter, start, goal)
-    plot_path_to_png(sst_path, 'm-', 0, N, 2, 'SST', 'figures/path_SST.png', start, goal)
+    sst_path = plan(space, 'sst', time, start, goal)
+    plot_path_to_png(sst_path[1], 'm-', 0, N, 2, 'SST', 'figures/path_SST.png', start, goal)
 
-    # rrtconnect_path = plan(space, 'rrtconnect', maxIter, start, goal)
-    # plot_path_to_png(rrtconnect_path, 'r-', 0, N, 3, ('RRTConnect', 'start', 'goal'), 'figures/path_RRTConnect.png')
+    informedrrtstar_path = plan(space, 'informedrrtstar', time, start, goal)
+    plot_path_to_png(informedrrtstar_path[1], 'b-', 0, N, 3, 'InformedRRT*', 'figures/path_InformedRRTStar.png', start, goal)
 
-    informedrrtstar_path = plan(space, 'informedrrtstar', maxIter, start, goal)
-    plot_path_to_png(informedrrtstar_path, 'b-', 0, N, 3, 'InformedRRT*', 'figures/path_InformedRRTStar.png', start, goal)
+    lbtrrt_path = plan(space, 'lbtrrt', time, start, goal)
+    plot_path_to_png(lbtrrt_path[1], 'r-', 0, N, 4, 'LBTRRT', 'figures/path_LBTRRT.png', start, goal)
 
-    lbtrrt_path = plan(space, 'lbtrrt', maxIter, start, goal)
-    plot_path_to_png(lbtrrt_path, 'r-', 0, N, 4, 'LBTRRT', 'figures/LBTRRT_path.png', start, goal)
 
-    f.write("end")
     f.close()
 
     plt.figure(5)
     paintobs()
     # plot_path(rrtconnect_path, 'r-', 0, N)
-    plot_path(rrtstar_path, 'b-', 'RRT*', 0, N)
-    plot_path(sst_path, 'g-', 'SST', 0, N)
-    plot_path(informedrrtstar_path, 'r-', 'InformedRRT*', 0, N)
-    plot_path(lbtrrt_path, 'm-', 'LBTRRT', 0, N)
+    plot_path(rrtstar_path[1], 'b-', 'RRT*', 0, N)
+    plot_path(sst_path[1], 'g-', 'SST', 0, N)
+    plot_path(informedrrtstar_path[1], 'r-', 'InformedRRT*', 0, N)
+    plot_path(lbtrrt_path[1], 'm-', 'LBTRRT', 0, N)
     plt.gca().set_aspect('equal', adjustable='box')
     plt.plot(start[0], start[1], 'k*')
     plt.plot(goal[0], goal[1], 'y*')
     plt.legend()
     plt.savefig('figures/paths.png')
+    return rrtstar_path[0], sst_path[0], informedrrtstar_path[0], lbtrrt_path[0]
 
 
 if __name__ == '__main__':
@@ -212,4 +212,13 @@ if __name__ == '__main__':
     set_start_and_goal(start, goal)
     print("start: ", start[0], start[1])
     print("goal: ", goal[0], goal[1])
-    badanie(1, 1000, space, start, goal)
+    wynik = list([0, 0, 0, 0])
+    L = 1
+    for n in range(0, L):
+        tmp = badanie(n, 1, space, start, goal)
+        for i in range(0, len(wynik)):
+            wynik[i] += tmp[i]
+    for i in range(0, len(wynik)):
+        wynik[i] = wynik[i]/L
+    sys.stdout = sys.__stdout__
+    print(wynik)
