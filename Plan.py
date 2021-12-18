@@ -3,20 +3,24 @@ from ompl import geometric as og
 import matplotlib.pyplot as plt
 import sys
 import labirynt
+import losoweprzeszkody
 from Pathfun import plot_path, plot_path_to_png, paintobs, plot_legend
-from Ustawienia import N, lab, dgoal, inna, L, des_time
+from Ustawienia import N, dgoal, L, des_time, plansza, plot_paths
 
 
-def plan(space, planner, time, start, goal):
+def plan(space, planner, time, start, goal, eps=0):
     ss = og.SimpleSetup(space)
-    if lab == 1:
+    if plansza == 1:
         ss.setStateValidityChecker(ob.StateValidityCheckerFn(labirynt.isStateValid))
-
+    elif plansza == 2 or plansza == 3:
+        ss.setStateValidityChecker(ob.StateValidityCheckerFn(losoweprzeszkody.isStateValid))
     ss.setStartAndGoalStates(start, goal)
-    if planner == 'rrt':
+    if planner.lower() == 'rrt':
         ss.setPlanner(og.RRT(ss.getSpaceInformation()))
     elif planner.lower() == 'lbtrrt':
-        ss.setPlanner(og.LBTRRT(ss.getSpaceInformation()))
+        planner_handle = og.LBTRRT(ss.getSpaceInformation())
+        planner_handle.setApproximationFactor(eps)
+        ss.setPlanner(planner_handle)
     elif planner.lower() == "rrtconnect":
         ss.setPlanner(og.RRTConnect(ss.getSpaceInformation()))
     elif planner.lower() == "est":
@@ -31,18 +35,15 @@ def plan(space, planner, time, start, goal):
         print('Bad planner')
         return 0, None
     OptObj = ob.PathLengthOptimizationObjective(ss.getSpaceInformation())
-    # OptObj.setCostThreshold(c_best)
     ss.setOptimizationObjective(OptObj)
     solved = ss.solve(time)
     if solved:
         ss.simplifySolution()
         path = ss.getSolutionPath()
-        if path.getState(path.getStateCount()).getX() == goal[0] and \
-                path.getState(path.getStateCount()).getY() == goal[1]:
+        if ss.haveExactSolutionPath():
             found = 1
         else:
             found = 0
-
         path.interpolate(1000)
         return found, path.printAsMatrix(), path.length()
     else:
@@ -51,42 +52,61 @@ def plan(space, planner, time, start, goal):
 
 
 def set_start_and_goal(start, goal):
-    if lab == 1:
+    if plansza == 1:
         start[0], start[1] = 10, 5
         goal[0], goal[1] = 80, 75
+    elif plansza == 2:
+        start[0], start[1] = 80, 15
+        goal[0], goal[1] = 50, 75
+    elif plansza == 3:
+        start[0], start[1] = 90, 10
+        goal[0], goal[1] = 5, 80
+    else:
+        start[0], start[1] = 1, 1
+        goal[0], goal[1] = 99, 99
 
 
 def badanie(time, space, start, goal):
+    rrt_path = plan(space, 'rrt', time, start, goal)
     rrtstar_path = plan(space, 'rrtstar', time, start, goal)
-    plot_path_to_png(rrtstar_path[1], 'g-', 0, N, 1, 'RRT*',
-                     'figures/path_RRTStar.png', start, goal)
-
     sst_path = plan(space, 'sst', time, start, goal)
-    plot_path_to_png(sst_path[1], 'm-', 0, N, 2, 'SST',
-                     'figures/path_SST.png', start, goal)
-
     informedrrtstar_path = plan(space, 'informedrrtstar', time, start, goal)
-    plot_path_to_png(informedrrtstar_path[1], 'b-', 0, N, 3, 'InformedRRT*',
-                     'figures/path_InformedRRTStar.png', start, goal)
+    lbtrrt_12_path = plan(space, 'lbtrrt', time, start, goal, 0.2)
+    lbtrrt_14_path = plan(space, 'lbtrrt', time, start, goal, 0.4)
+    lbtrrt_18_path = plan(space, 'lbtrrt', time, start, goal, 0.8)
+    if plot_paths == 1:
+        plot_path_to_png(rrt_path[1], 'dimgrey', 0, N, 1, 'RRT',
+                         'figures/path_RRT.png', start, goal)
+        plot_path_to_png(rrtstar_path[1], 'blue', 0, N, 1, 'RRT*',
+                         'figures/path_RRTStar.png', start, goal)
+        plot_path_to_png(sst_path[1], 'green', 0, N, 2, 'SST',
+                         'figures/path_SST.png', start, goal)
+        plot_path_to_png(informedrrtstar_path[1], 'red', 0, N, 3, 'InformedRRT*',
+                         'figures/path_InformedRRTStar.png', start, goal)
+        plot_path_to_png(lbtrrt_12_path[1], 'magenta', 0, N, 4, '1.2',
+                         'figures/path_LBTRRT12.png', start, goal)
+        plot_path_to_png(lbtrrt_14_path[1], 'darkmagenta', 0, N, 4, '1.4',
+                         'figures/path_LBTRRT14.png', start, goal)
+        plot_path_to_png(lbtrrt_18_path[1], 'orchid', 0, N, 4, '1.8',
+                         'figures/path_LBTRRT18.png', start, goal)
 
-    lbtrrt_path = plan(space, 'lbtrrt', time, start, goal)
-    plot_path_to_png(lbtrrt_path[1], 'r-', 0, N, 4, 'LBTRRT',
-                     'figures/path_LBTRRT.png', start, goal)
-
-    plt.figure(5)
-    paintobs(1)
-    # plot_path(rrtconnect_path, 'r-', 0, N)
-    plot_path(rrtstar_path[1], 'b-', 0, N)
-    plot_path(sst_path[1], 'g-', 0, N)
-    plot_path(informedrrtstar_path[1], 'r-', 0, N)
-    plot_path(lbtrrt_path[1], 'm-', 0, N)
-    plt.gca().set_aspect('equal', adjustable='box')
-    plt.plot(start[0], start[1], 'k*')
-    plt.plot(goal[0], goal[1], 'y*')
-    plot_legend(('RRT*', 'SST', 'InformedRRT*', 'LBTRRT',))
-    plt.savefig('figures/paths.png')
-    return (rrtstar_path[0], rrtstar_path[2]), (sst_path[0], sst_path[2]),\
-           (informedrrtstar_path[0], informedrrtstar_path[2]), (lbtrrt_path[0], lbtrrt_path[2])
+        plt.figure(5)
+        plot_path(rrt_path[1], 'dimgrey', 0, N)
+        plot_path(rrtstar_path[1], 'blue', 0, N)
+        plot_path(sst_path[1], 'green', 0, N)
+        plot_path(informedrrtstar_path[1], 'red', 0, N)
+        plot_path(lbtrrt_14_path[1], 'darkmagenta', 0, N)
+        plot_path(lbtrrt_12_path[1], 'magenta', 0, N)
+        plot_path(lbtrrt_18_path[1], 'orchid', 0, N)
+        plt.gca().set_aspect('equal', adjustable='box')
+        plt.plot(start[0], start[1], 'k*')
+        plt.plot(goal[0], goal[1], 'y*')
+        paintobs(plansza)
+        plot_legend(['RRT', 'RRT*', 'SST', 'I-RRT*', '1.2', '1.4', '1.8'])
+        plt.savefig('figures/paths.png')
+    return (rrt_path[0], rrt_path[2]), (rrtstar_path[0], rrtstar_path[2]), (sst_path[0], sst_path[2]),\
+           (informedrrtstar_path[0], informedrrtstar_path[2]), (lbtrrt_12_path[0], lbtrrt_12_path[2]), \
+           (lbtrrt_14_path[0], lbtrrt_14_path[2]), (lbtrrt_18_path[0], lbtrrt_18_path[2])
 
 
 if __name__ == '__main__':
@@ -100,29 +120,38 @@ if __name__ == '__main__':
     set_start_and_goal(start_, goal_)
     print("start: ", start_[0], start_[1])
     print("goal: ", goal_[0], goal_[1])
-    wynik = list([(0, 0), (0, 0), (0, 0), (0, 0)])
+    wynik = list([(0, 0),(0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0)])
     wynik[:] = [list(x) for x in wynik]
-    nazwa_pliku = "badania/" + str(L) + "_" + str(des_time) + "s.txt"
+    nazwa_pliku = "badania/plansza_" + str(plansza) + "_it_" + str(L) + "_" + str(des_time) + "s.txt"
     f = open(nazwa_pliku, 'w')
     sys.stdout = f
     print("time:", des_time)
     for n in range(0, L):
         tmp = badanie(des_time, s, start_, goal_)
-        wynik_rrtstar = tmp[0]
-        wynik_sst = tmp[1]
-        wynik_informedrrtstar = tmp[2]
-        wynik_lbtrrt = tmp[3]
-        wynik[0][0] = wynik[0][0] + wynik_rrtstar[0]
-        wynik[0][1] = wynik[0][1] + wynik_rrtstar[1]
-        wynik[1][0] = wynik[0][0] + wynik_sst[0]
-        wynik[1][1] = wynik[0][1] + wynik_sst[1]
-        wynik[2][0] = wynik[0][0] + wynik_informedrrtstar[0]
-        wynik[2][1] = wynik[0][1] + wynik_informedrrtstar[1]
-        wynik[3][0] = wynik[0][0] + wynik_lbtrrt[0]
-        wynik[3][1] = wynik[0][1] + wynik_lbtrrt[1]
+        wynik_rrt = tmp[0]
+        wynik_rrtstar = tmp[1]
+        wynik_sst = tmp[2]
+        wynik_informedrrtstar = tmp[3]
+        wynik_12 = tmp[4]
+        wynik_14 = tmp[5]
+        wynik_18 = tmp[6]
+        wynik[0][0] = wynik[0][0] + wynik_rrt[0]
+        wynik[0][1] = wynik[0][1] + wynik_rrt[1]
+        wynik[1][0] = wynik[1][0] + wynik_rrtstar[0]
+        wynik[1][1] = wynik[1][1] + wynik_rrtstar[1]
+        wynik[2][0] = wynik[2][0] + wynik_sst[0]
+        wynik[2][1] = wynik[2][1] + wynik_sst[1]
+        wynik[3][0] = wynik[3][0] + wynik_informedrrtstar[0]
+        wynik[3][1] = wynik[3][1] + wynik_informedrrtstar[1]
+        wynik[4][0] = wynik[4][0] + wynik_12[0]
+        wynik[4][1] = wynik[4][1] + wynik_12[1]
+        wynik[5][0] = wynik[5][0] + wynik_14[0]
+        wynik[5][1] = wynik[5][1] + wynik_14[1]
+        wynik[6][0] = wynik[6][0] + wynik_18[0]
+        wynik[6][1] = wynik[6][1] + wynik_18[1]
     times = [x[0] / L for x in wynik]
     length = [x[1] / L for x in wynik]
-    names = ('rrtstar', 'sst', 'informedrrtstar', 'lbtrrt')
+    names = ('rrt', 'rrtstar', 'sst', 'informedrrtstar', '1.2', '1.4', '1.8')
     print(list(names))
     print(times)
     print(length)
